@@ -1,0 +1,7 @@
+-I/opt/homebrew/opt/openssl/include
+-I/usr/local/opt/openssl/include
+-I/opt/homebrew/opt/zlib/include
+-I/usr/local/opt/zlib/include
+-lz
+-Wall
+-Wextra
