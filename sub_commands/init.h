@@ -3,12 +3,12 @@
 
 #define INIT_SUBCOMMAND "init"
 
-#define SUCCESS 0
-#define FAILURE -1
-#define ENTRY_DIR "./.berero"
-#define OBJECT_DIR "./.berero/objects"
-#define BRANCH_DIR "./.berero/branches"
-#define INDEX_FILE "./.berero/index"
+#define INIT_OK 0
+#define INIT_ERROR -1
+#define INIT_ENTRY_DIR "./.berero"
+#define INIT_OBJECT_DIR "./.berero/objects"
+#define INIT_BRANCH_DIR "./.berero/branches"
+#define INIT_INDEX_FILE "./.berero/index"
 
 int init(int argc, char *argv[]);
 

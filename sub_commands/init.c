@@ -8,29 +8,29 @@
 static int create_dir(const char *path) {
   if (mkdir(path, DIR_PRIVATE_MODE) == -1) {
     if (errno == EEXIST) {
-      return SUCCESS;
+      return INIT_OK;
     } else {
       perror(path);
-      return FAILURE;
+      return INIT_ERROR;
     }
   }
-  return SUCCESS;
+  return INIT_OK;
 }
 
 int init(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
-  if (create_dir(ENTRY_DIR) == FAILURE)
-    return FAILURE;
+  if (create_dir(INIT_ENTRY_DIR) == INIT_ERROR)
+    return INIT_ERROR;
 
-  if (create_dir(OBJECT_DIR) == FAILURE)
-    return FAILURE;
+  if (create_dir(INIT_OBJECT_DIR) == INIT_ERROR)
+    return INIT_ERROR;
 
-  if (create_dir(BRANCH_DIR) == FAILURE)
-    return FAILURE;
+  if (create_dir(INIT_BRANCH_DIR) == INIT_ERROR)
+    return INIT_ERROR;
 
-  if (create_dir(INDEX_FILE) == FAILURE)
-    return FAILURE;
+  if (create_dir(INIT_INDEX_FILE) == INIT_ERROR)
+    return INIT_ERROR;
 
-  return SUCCESS;
+  return INIT_OK;
 }

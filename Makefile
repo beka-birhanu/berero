@@ -5,8 +5,9 @@ LDFLAGS = -L/opt/homebrew/opt/openssl@3/lib -L/opt/homebrew/opt/zlib/lib
 LDLIBS  = -lcrypto -lz
 BUILD   = build
 
-SRC     := $(wildcard src/*.c)
-OBJ     := $(patsubst src/%.c,$(BUILD)/%.o,$(SRC))
+SRC     := $(filter-out tests/% utiles/dir.c,$(wildcard *.c sub_commands/*.c utiles/*.c))
+OBJ     := $(addprefix $(BUILD)/,$(SRC:.c=.o))
+
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -18,7 +19,7 @@ $(BUILD)/%.o: %.c | $(BUILD)
 $(BUILD)/berero: $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) $(LDLIBS) -o $@
 
-run: $(BUILD)/berero
+run: force $(BUILD)/berero
 	@./$(BUILD)/berero $(args)
 
 hash: $(BUILD)
@@ -31,7 +32,15 @@ test: $(BUILD)
 	@echo "[run] Executing test suite..."
 	@./$(BUILD)/test
 
+test-blob: $(BUILD)
+	@echo "[build] Linking blob test..."
+	@$(CC) $(CFLAGS) -I. tests/blob_test.c utiles/blob.c $(LDFLAGS) $(LDLIBS) -o $(BUILD)/blob_test
+	@echo "[run] Executing blob tests..."
+	@./$(BUILD)/blob_test
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: run hash test clean
+force:
+
+.PHONY: run hash test test-blob clean
