@@ -13,6 +13,9 @@ int chimek(FILE *source, FILE *dest) {
   int ret, flush;
   unsigned have;
   z_stream strm;
+
+  if (!source || !dest)
+    return BLOB_ERROR;
   unsigned char in[CHUNK_SIZE];
   unsigned char out[CHUNK_SIZE];
 
@@ -23,13 +26,13 @@ int chimek(FILE *source, FILE *dest) {
   ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8,
                      Z_DEFAULT_STRATEGY);
   if (ret != Z_OK)
-    return ret;
+    return BLOB_ERROR;
 
   do {
     strm.avail_in = fread(in, 1, CHUNK_SIZE, source);
     if (ferror(source)) {
       deflateEnd(&strm);
-      return Z_ERRNO;
+      return BLOB_ERROR;
     }
     flush = feof(source) ? Z_FINISH : Z_NO_FLUSH;
     strm.next_in = in;
@@ -40,24 +43,27 @@ int chimek(FILE *source, FILE *dest) {
       ret = deflate(&strm, flush);
       if (ret == Z_STREAM_ERROR) {
         deflateEnd(&strm);
-        return ret;
+        return BLOB_ERROR;
       }
       have = CHUNK_SIZE - strm.avail_out;
       if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
         deflateEnd(&strm);
-        return Z_ERRNO;
+        return BLOB_ERROR;
       }
     } while (strm.avail_out == 0);
   } while (flush != Z_FINISH);
 
   ret = deflateEnd(&strm);
-  return (ret == Z_OK) ? Z_OK : ret;
+  return (ret == Z_OK) ? BLOB_OK : BLOB_ERROR;
 }
 
 int zerga(FILE *source, FILE *dest) {
   int ret;
   unsigned have;
   z_stream strm;
+
+  if (!source || !dest)
+    return BLOB_ERROR;
   unsigned char in[CHUNK_SIZE];
   unsigned char out[CHUNK_SIZE];
 
@@ -69,13 +75,13 @@ int zerga(FILE *source, FILE *dest) {
   // windowBits = 32 + 15 auto-detects zlib or gzip format
   ret = inflateInit2(&strm, 32 + 15);
   if (ret != Z_OK)
-    return ret;
+    return BLOB_ERROR;
 
   do {
     strm.avail_in = fread(in, 1, CHUNK_SIZE, source);
     if (ferror(source)) {
       inflateEnd(&strm);
-      return Z_ERRNO;
+      return BLOB_ERROR;
     }
     if (strm.avail_in == 0)
       break;
@@ -88,24 +94,26 @@ int zerga(FILE *source, FILE *dest) {
       if (ret == Z_STREAM_ERROR || ret == Z_NEED_DICT || ret == Z_DATA_ERROR ||
           ret == Z_MEM_ERROR) {
         inflateEnd(&strm);
-        return ret;
+        return BLOB_ERROR;
       }
       have = CHUNK_SIZE - strm.avail_out;
       if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
         inflateEnd(&strm);
-        return Z_ERRNO;
+        return BLOB_ERROR;
       }
     } while (strm.avail_out == 0);
   } while (ret != Z_STREAM_END);
 
   inflateEnd(&strm);
-  return (ret == Z_STREAM_END) ? Z_OK : Z_DATA_ERROR;
+  return (ret == Z_STREAM_END) ? BLOB_OK : BLOB_ERROR;
 }
 
 int bwrite(const char *source, const char *dest) {
   FILE *source_file;
   FILE *dest_file;
 
+  if (!source || !dest)
+    return BLOB_ERROR;
   if (strlen(dest) < BLOB_MIN_FILE_NAME) {
     return BLOB_ERROR;
   }
@@ -155,6 +163,8 @@ int bread(const char *source, const char *dest) {
   FILE *source_file;
   FILE *dest_file;
 
+  if (!source || !dest)
+    return BLOB_ERROR;
   if (strlen(source) < BLOB_MIN_FILE_NAME) {
     return BLOB_ERROR;
   }

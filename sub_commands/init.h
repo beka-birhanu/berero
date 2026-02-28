@@ -12,4 +12,7 @@
 
 int init(int argc, char *argv[]);
 
+// returns 1 if initialized, 0 if not
+int initialized();
+
 #endif // INIT_H

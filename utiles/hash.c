@@ -6,16 +6,19 @@
 #define CHUNK_SIZE 16384
 #define EVP_OK 1
 
-int hash(FILE *file, unsigned char *hash) {
+int sh_hash(FILE *file, unsigned char *hash) {
   size_t read_in;
   int evp_ret;
 
+  if (!file || !hash)
+    return HASH_ERROR;
+
   EVP_MD_CTX *ctx = EVP_MD_CTX_new();
   if (!ctx)
-    return -1;
+    return HASH_ERROR;
 
   if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) != 1)
-    return -1;
+    return HASH_ERROR;
 
   unsigned char in[CHUNK_SIZE];
 

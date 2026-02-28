@@ -21,14 +21,13 @@ int bwrite(const char *source, const char *dest);
 int bread(const char *source, const char *dest);
 
 // Compresses source into dest using gzip format.
-// Returns Z_OK on success, or a zlib error code on failure.
+// Returns BLOB_OK on success, BLOB_ERROR on failure.
 //
 // Note: it is assumed that both source and dest are already opened.
 int chimek(FILE *source, FILE *dest);
 
 // Decompresses source into dest (supports zlib and gzip format).
-// Returns Z_OK on success, Z_DATA_ERROR if source had no data,
-// or another zlib error code on failure.
+// Returns BLOB_OK on success, BLOB_ERROR on failure.
 //
 // Note: it is assumed that both source and dest are already opened.
 int zerga(FILE *source, FILE *dest);

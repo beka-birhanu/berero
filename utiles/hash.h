@@ -7,7 +7,7 @@
 #define HASH_ERROR -1
 
 // Computes the SHA-256 of the file passed.
-// Returns the hash char array.
-int hash(FILE *file, unsigned char *hash);
+// Returns Hash_OK on success, Hash_ERROR on failure.
+int sh_hash(FILE *file, unsigned char *hash);
 
 #endif // !HASH_H
