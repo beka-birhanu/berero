@@ -162,13 +162,173 @@ static void test_hash_valid_buffer(void) {
   test_ok();
 }
 
+static void test_hash_deterministic(void) {
+  test_start("same content hashed twice yields identical result");
+  const char *content = "determinism check\n";
+  size_t len = strlen(content);
+  FILE *f1 = tmpfile_with(content, len);
+  FILE *f2 = tmpfile_with(content, len);
+  if (!f1 || !f2) {
+    if (f1) fclose(f1);
+    if (f2) fclose(f2);
+    test_fail("tmpfile failed");
+    return;
+  }
+  unsigned char h1[SHA256_LEN], h2[SHA256_LEN];
+  int r1 = sh_hash(f1, h1);
+  int r2 = sh_hash(f2, h2);
+  fclose(f1);
+  fclose(f2);
+  if (r1 != HASH_OK || r2 != HASH_OK) {
+    test_fail("sh_hash returned error");
+    return;
+  }
+  if (!hash_equal(h1, h2)) {
+    test_fail("same content produced different hashes");
+    return;
+  }
+  test_ok();
+}
+
+static void test_hash_distinct_content(void) {
+  test_start("different content produces different hashes");
+  FILE *f1 = tmpfile_with("aaaa", 4);
+  FILE *f2 = tmpfile_with("bbbb", 4);
+  if (!f1 || !f2) {
+    if (f1) fclose(f1);
+    if (f2) fclose(f2);
+    test_fail("tmpfile failed");
+    return;
+  }
+  unsigned char h1[SHA256_LEN], h2[SHA256_LEN];
+  sh_hash(f1, h1);
+  sh_hash(f2, h2);
+  fclose(f1);
+  fclose(f2);
+  if (hash_equal(h1, h2)) {
+    test_fail("distinct content produced same hash");
+    return;
+  }
+  test_ok();
+}
+
+static void test_bin_to_hex_known(void) {
+  test_start("sh_bin_to_hex produces correct lowercase hex string");
+  unsigned char bin[4] = {0xde, 0xad, 0xbe, 0xef};
+  char hex[9];
+  sh_bin_to_hex(bin, 4, hex);
+  if (strcmp(hex, "deadbeef") != 0) {
+    test_fail("expected \"deadbeef\"");
+    return;
+  }
+  test_ok();
+}
+
+static void test_combine_hash_deterministic(void) {
+  test_start("sh_combine_hash is deterministic for same inputs");
+  FILE *fa = tmpfile_with("aaa", 3);
+  FILE *fb = tmpfile_with("bbb", 3);
+  if (!fa || !fb) {
+    if (fa) fclose(fa);
+    if (fb) fclose(fb);
+    test_fail("tmpfile failed");
+    return;
+  }
+  unsigned char ha[SHA256_LEN], hb[SHA256_LEN];
+  sh_hash(fa, ha);
+  sh_hash(fb, hb);
+  fclose(fa);
+  fclose(fb);
+
+  const unsigned char *arr[2] = {ha, hb};
+  unsigned char out1[SHA256_LEN], out2[SHA256_LEN];
+  if (sh_combine_hash(arr, 2, out1) != HASH_OK ||
+      sh_combine_hash(arr, 2, out2) != HASH_OK) {
+    test_fail("sh_combine_hash returned error");
+    return;
+  }
+  if (!hash_equal(out1, out2)) {
+    test_fail("sh_combine_hash not deterministic");
+    return;
+  }
+  test_ok();
+}
+
+static void test_combine_hash_order_independent(void) {
+  test_start("sh_combine_hash([A,B]) equals sh_combine_hash([B,A])");
+  FILE *fa = tmpfile_with("file-a", 6);
+  FILE *fb = tmpfile_with("file-b", 6);
+  if (!fa || !fb) {
+    if (fa) fclose(fa);
+    if (fb) fclose(fb);
+    test_fail("tmpfile failed");
+    return;
+  }
+  unsigned char ha[SHA256_LEN], hb[SHA256_LEN];
+  sh_hash(fa, ha);
+  sh_hash(fb, hb);
+  fclose(fa);
+  fclose(fb);
+
+  const unsigned char *ab[2] = {ha, hb};
+  const unsigned char *ba[2] = {hb, ha};
+  unsigned char out_ab[SHA256_LEN], out_ba[SHA256_LEN];
+  if (sh_combine_hash(ab, 2, out_ab) != HASH_OK ||
+      sh_combine_hash(ba, 2, out_ba) != HASH_OK) {
+    test_fail("sh_combine_hash returned error");
+    return;
+  }
+  if (!hash_equal(out_ab, out_ba)) {
+    test_fail("sh_combine_hash is order-dependent");
+    return;
+  }
+  test_ok();
+}
+
+static void test_combine_hash_distinct_inputs(void) {
+  test_start("sh_combine_hash([A,B]) differs from sh_combine_hash([A,C])");
+  FILE *fa = tmpfile_with("same", 4);
+  FILE *fb = tmpfile_with("other-b", 7);
+  FILE *fc = tmpfile_with("other-c", 7);
+  if (!fa || !fb || !fc) {
+    if (fa) fclose(fa);
+    if (fb) fclose(fb);
+    if (fc) fclose(fc);
+    test_fail("tmpfile failed");
+    return;
+  }
+  unsigned char ha[SHA256_LEN], hb[SHA256_LEN], hc[SHA256_LEN];
+  sh_hash(fa, ha);
+  sh_hash(fb, hb);
+  sh_hash(fc, hc);
+  fclose(fa);
+  fclose(fb);
+  fclose(fc);
+
+  const unsigned char *ab[2] = {ha, hb};
+  const unsigned char *ac[2] = {ha, hc};
+  unsigned char out_ab[SHA256_LEN], out_ac[SHA256_LEN];
+  sh_combine_hash(ab, 2, out_ab);
+  sh_combine_hash(ac, 2, out_ac);
+  if (hash_equal(out_ab, out_ac)) {
+    test_fail("different input sets produced same combined hash");
+    return;
+  }
+  test_ok();
+}
+
 int main(void) {
   printf("\n=== hash.c tests ===\n\n");
   test_hash_empty_file();
   test_hash_known_content();
   test_hash_larger_than_chunk();
   test_hash_valid_buffer();
+  test_hash_deterministic();
+  test_hash_distinct_content();
+  test_bin_to_hex_known();
+  test_combine_hash_deterministic();
+  test_combine_hash_order_independent();
+  test_combine_hash_distinct_inputs();
   printf("\n  Passed: %d / %d\n", tests_passed, tests_run);
   return tests_passed == tests_run ? 0 : 1;
 }
-

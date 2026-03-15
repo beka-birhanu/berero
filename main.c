@@ -11,11 +11,6 @@ int main(int argc, char *argv[]) {
     return EXIT_SUCCESS;
   }
 
-  if (strcmp(argv[1], HELP_SUBCOMMAND) == 0) {
-    help(argc - 1, ++argv);
-    return EXIT_SUCCESS;
-  }
-
   if (strcmp(argv[1], INIT_SUBCOMMAND) == 0) {
     return init(argc - 1, ++argv);
   }
@@ -30,5 +25,6 @@ int main(int argc, char *argv[]) {
     return add(argc - 1, ++argv);
   }
 
+  help(argc - 1, ++argv);
   return EXIT_SUCCESS;
 }

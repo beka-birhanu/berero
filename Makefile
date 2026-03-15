@@ -14,7 +14,7 @@ $(BUILD):
 
 $(BUILD)/%.o: %.c | $(BUILD)
 	@mkdir -p $(dir $@)
-	@$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -g -c $< -o $@
 
 $(BUILD)/berero: $(OBJ)
 	@$(CC) $(CFLAGS) $(OBJ) $(LDFLAGS) $(LDLIBS) -o $@
@@ -38,7 +38,7 @@ test-blob: $(BUILD)
 	@./$(BUILD)/blob_test
 
 test-index: $(BUILD)
-	@$(CC) $(CFLAGS) -I. tests/index.c utiles/index.c utiles/hash_table.c utiles/linked_list.c -o $(BUILD)/index_test
+	@$(CC) $(CFLAGS) -I. tests/index.c utiles/index.c utiles/hash.c utiles/hash_table.c utiles/linked_list.c $(LDFLAGS) $(LDLIBS) -o $(BUILD)/index_test
 	@./$(BUILD)/index_test
 
 test-hash_table: $(BUILD)

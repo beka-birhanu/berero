@@ -1,184 +1,305 @@
 #include "index.h"
+#include "hash.h"
 #include "hash_table.h"
-#include "linked_list.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-struct Index *i_new(const char *file_name, const char *hash, time_t change_time,
-                    unsigned int status) {
+int _i_add(struct INode *curr, const struct INode *inode, char *path_tok);
+int _recomp_hash(struct INode *curr);
+void _i_free(void *i);
+int _i_dump(const struct INode *i, FILE *f, const char *path_prifix);
 
-  if (!file_name || !hash)
+struct INode *i_new(time_t change_time, short unsigned int mode,
+                    short unsigned int status, unsigned int n_daughters,
+                    char *path, unsigned char *hash) {
+  if (path == NULL || hash == NULL)
     return NULL;
-
-  if ((status != INDEX_STATUS_ADDED && status != INDEX_STATUS_DELETED &&
-       status != INDEX_STATUS_MODIFIED)) {
-    return NULL;
-  }
-
-  if (strlen(file_name) > FILENAME_MAX || strlen(hash) > 64)
-    return NULL;
-
-  struct Index *idx = malloc(sizeof(*idx));
-  if (!idx)
-    return NULL;
-
-  idx->change_time = change_time;
-
-  idx->file_name = malloc(strlen(file_name) + 1);
-  if (!idx->file_name) {
-    free(idx);
-    return NULL;
-  }
-  strcpy(idx->file_name, file_name);
-
-  idx->hash = malloc(strlen(hash) + 1);
-  if (!idx->hash) {
-    free(idx->file_name);
-    free(idx);
-    return NULL;
-  }
-  strcpy(idx->hash, hash);
-  idx->status = status;
-
-  return idx;
+  struct INode *i = malloc(sizeof(struct INode));
+  i->change_time = change_time;
+  i->mode = mode;
+  i->status = status;
+  i->n_daughters = n_daughters;
+  i->path = path;
+  i->hash = hash;
+  return i;
 }
 
-void i_free(struct Index *idx) {
-  if (!idx)
+void _i_free(void *i) { return i == NULL ?: i_free(i); }
+void i_free(struct INode *i) {
+  if (i == NULL)
     return;
-  free(idx->file_name);
-  free(idx->hash);
-  free(idx);
+  free(i->path);
+  free(i->hash);
+  ht_free(i->daughters);
+  free(i);
 }
 
-char *i_stringify(const struct Index *idx) {
-  if (!idx)
-    return NULL;
-
-  /* estimate size safely */
-  size_t needed = snprintf(NULL, 0, "%s %ld %s %du\n", idx->file_name,
-                           (long)idx->change_time, idx->hash, idx->status);
-
-  char *s = malloc(needed + 1);
-  if (!s)
-    return NULL;
-
-  snprintf(s, needed + 1, "%s %ld %s %du\n", idx->file_name,
-           (long)idx->change_time, idx->hash, idx->status);
-  return s;
-}
-
-struct Index *i_load(const char *s) {
-  if (!s)
-    return NULL;
-
-  long change_time;
-  unsigned int status;
-  char file_name[FILENAME_MAX + 1];
-  char hash[65]; // assuming SHA-256 hex (64 + null)
-
-  if (sscanf(s, "%1024s %ld %64s %du", file_name, &change_time, hash,
-             &status) != 3) {
-    return NULL;
-  }
-
-  return i_new(file_name, hash, (time_t)change_time, status);
-}
-
-struct HashTable *im_load() {
-  struct HashTable *ht = ht_new(HT_MAX_SIZE);
-  if (!ht)
-    return NULL;
-
-  FILE *index_file = fopen(INDEX_FILE_PATH, "r");
-  if (!index_file) {
-    ht_free(ht);
-    return NULL;
-  }
-
-  char *line = NULL;
-  size_t linecap = 0;
-  ssize_t linelen;
-
-  while ((linelen = getline(&line, &linecap, index_file)) != -1) {
-    // Remove trailing newline
-    if (linelen > 0 && line[linelen - 1] == '\n') {
-      line[linelen - 1] = '\0';
-    }
-
-    struct Index *idx = i_load(line);
-    if (!idx)
-      continue; // skip malformed lines
-
-    ht_add(ht, idx->file_name, idx);
-  }
-
-  free(line);
-  fclose(index_file);
-
-  return ht;
-}
-
-int im_dump(struct HashTable *ht) {
-  if (!ht)
+int i_add(struct INode *itree, const struct INode *inode) {
+  if (itree == NULL || inode == NULL || itree->hash == NULL ||
+      inode->hash == NULL || itree->path == NULL || inode->path == NULL)
     return INDEX_ERROR;
-
-  FILE *index_file = fopen(INDEX_FILE_PATH, "w");
-  if (!index_file) {
-    perror(INDEX_FILE_PATH);
+  char *path = strdup(inode->path);
+  if (path == NULL)
+    return INDEX_ERROR;
+  char *path_tok = strtok(path, "/");
+  if (path_tok == NULL) {
+    free(path);
     return INDEX_ERROR;
   }
 
-  struct Node *idx_node = NULL;
-  struct Index *idx = NULL;
-  char *s = NULL;
-
-  ht_reset_iter(ht);
-
-  while ((idx_node = ht_iter(ht))) {
-    idx = ll_node_value(idx_node);
-    s = i_stringify(idx);
-    if (!s) {
-      fclose(index_file);
-      return INDEX_ERROR;
-    }
-
-    if (fputs(s, index_file) == EOF) {
-      perror(INDEX_FILE_PATH);
-      free(s);
-      fclose(index_file);
-      return INDEX_ERROR;
-    }
-
-    free(s);
-  }
-
-  if (fclose(index_file) == EOF) {
-    perror(INDEX_FILE_PATH);
+  if (_i_add(itree, inode, path_tok) != INDEX_OK) {
+    free(path);
     return INDEX_ERROR;
   }
 
+  free(path);
   return INDEX_OK;
 }
 
-const struct Index *i_get(struct HashTable *ht, const char *key) {
-  if (!(ht && key))
-    return NULL;
+int _i_add(struct INode *curr, const struct INode *inode, char *path_tok) {
+  if (curr == NULL || inode == NULL)
+    return INDEX_OK;
 
-  return (struct Index *)ht_get(ht, key);
+  path_tok = strtok(NULL, "/");
+  if (path_tok == NULL) {
+    curr->status = inode->status;
+    curr->mode = inode->mode;
+    curr->n_daughters = inode->n_daughters;
+    free(curr->hash);
+    curr->hash = inode->hash;
+    return INDEX_OK;
+  }
+
+  if (curr->daughters == NULL) {
+    curr->daughters = ht_new(HT_MAX_SIZE);
+  }
+
+  if (ht_get(curr->daughters, path_tok) == NULL) {
+    unsigned char *hash = malloc(HASH_LEN);
+    if (!hash) {
+      return INDEX_ERROR;
+    }
+    struct INode *new = i_new(inode->change_time, INDEX_MODE_DIR,
+                              INDEX_STATUS_NONE, 0, strdup(path_tok), hash);
+    ht_add(curr->daughters, path_tok, new, _i_free);
+    curr->n_daughters++;
+    curr->change_time = curr->change_time < inode->change_time
+                            ? inode->change_time
+                            : curr->change_time;
+  }
+
+  if (_i_add(ht_get(curr->daughters, path_tok), inode, path_tok) != INDEX_OK) {
+    return INDEX_ERROR;
+  }
+
+  return _recomp_hash(curr);
 }
 
-int i_add(struct HashTable *ht, const struct Index *index) {
-  if (!(ht && index))
+int _recomp_hash(struct INode *curr) {
+  if (curr == NULL)
     return INDEX_ERROR;
 
-  struct Index *idx_copy =
-      i_new(index->file_name, index->hash, index->change_time, index->status);
-  if (!idx_copy)
+  if (curr->n_daughters == 0)
+    return INDEX_OK;
+
+  const unsigned char **hashes =
+      malloc(curr->n_daughters * sizeof(unsigned char *));
+  if (!hashes)
     return INDEX_ERROR;
 
-  return ht_add(ht, index->file_name, idx_copy) == HT_OK ? INDEX_OK
-                                                         : INDEX_ERROR;
+  ht_reset_iter(curr->daughters);
+  for (unsigned int i = 0; i < curr->n_daughters; i++) {
+    const struct INode *inode = ht_iter(curr->daughters);
+    if (!inode)
+      return INDEX_ERROR;
+    hashes[i] = inode->hash;
+  }
+
+  unsigned char *out = malloc(HASH_LEN);
+  if (!out) {
+    free(hashes);
+    return INDEX_ERROR;
+  }
+
+  if (sh_combine_hash(hashes, curr->n_daughters, out) != HASH_OK) {
+    free(hashes);
+    return INDEX_ERROR;
+  }
+
+  free(curr->hash);
+  curr->hash = out;
+  free(hashes);
+  return INDEX_OK;
+}
+
+void i_print(const struct INode *curr) {
+  if (curr == NULL)
+    return;
+
+  char hex[HASH_LEN * 2 + 1];
+  sh_bin_to_hex(curr->hash, HASH_LEN, hex);
+  printf("path: %s\n", curr->path);
+  printf("hash: %s\n", hex);
+  printf("\n");
+  printf("mode: %d\n", curr->mode);
+  printf("status: %d\n", curr->status);
+  printf("n_daughters: %d\n", curr->n_daughters);
+
+  ht_reset_iter(curr->daughters);
+  for (unsigned int i = 0; i < curr->n_daughters; i++) {
+    const struct INode *inode = ht_iter(curr->daughters);
+    i_print(inode);
+  }
+}
+
+const struct INode *i_get(const struct INode *i, const char *_path) {
+  if (!i || !_path)
+    return NULL;
+
+  char *path = strdup(_path);
+  if (!path)
+    return NULL;
+  char *path_tok = strtok(path, "/");
+  if (!path_tok) {
+    free(path);
+    return NULL;
+  }
+
+  while (path_tok) {
+    const struct INode *inode = ht_get(i->daughters, path_tok);
+    if (!inode) {
+      free(path);
+      return NULL;
+    }
+    i = inode;
+    path_tok = strtok(NULL, "/");
+  }
+
+  free(path);
+  return i;
+}
+
+struct INode *i_load() {
+  FILE *f = fopen(INDEX_FILE_PATH, "rb");
+  if (!f)
+    return NULL;
+
+  unsigned char *root_hash = calloc(HASH_LEN, 1);
+  if (!root_hash) {
+    fclose(f);
+    return NULL;
+  }
+  struct INode *root =
+      i_new(0, INDEX_MODE_DIR, INDEX_STATUS_NONE, 0, strdup("."), root_hash);
+  if (!root) {
+    free(root_hash);
+    fclose(f);
+    return NULL;
+  }
+  root->daughters = ht_new(HT_MAX_SIZE);
+
+  char path[4096];
+  char hex[HASH_LEN * 2 + 1];
+  long change_time;
+  unsigned int status;
+
+  while (fscanf(f, "%4095s %64s %ld %u", path, hex, &change_time, &status) ==
+         4) {
+    unsigned char *hash = malloc(HASH_LEN);
+    if (!hash) {
+      i_free(root);
+      fclose(f);
+      return NULL;
+    }
+    for (int j = 0; j < HASH_LEN; j++) {
+      unsigned int byte;
+      sscanf(hex + j * 2, "%02x", &byte);
+      hash[j] = (unsigned char)byte;
+    }
+
+    struct INode *node =
+        i_new((time_t)change_time, INDEX_MODE_FILE, (short unsigned int)status,
+              0, strdup(path), hash);
+    if (!node) {
+      free(hash);
+      i_free(root);
+      fclose(f);
+      return NULL;
+    }
+    node->daughters = NULL;
+
+    if (i_add(root, node) != INDEX_OK) {
+      node->hash = NULL;
+      i_free(node);
+      i_free(root);
+      fclose(f);
+      return NULL;
+    }
+    // hash ownership is transferred to root
+    node->hash = NULL;
+    i_free(node);
+  }
+
+  fclose(f);
+  return root;
+}
+
+int i_dump(const struct INode *i) {
+  if (!i)
+    return INDEX_ERROR;
+
+  FILE *f = fopen(INDEX_FILE_PATH, "wb");
+  if (!f) {
+    perror(INDEX_FILE_PATH);
+    return INDEX_ERROR;
+  }
+
+  if (_i_dump(i, f, "") != INDEX_OK) {
+    fclose(f);
+    return INDEX_ERROR;
+  }
+
+  fclose(f);
+  return INDEX_OK;
+}
+
+int _i_dump(const struct INode *i, FILE *f, const char *path_prifix) {
+  if (!i || !f)
+    return INDEX_ERROR;
+
+  char *path;
+  if (path_prifix[0] == '\0') {
+    path = strdup(i->path);
+  } else {
+    path = malloc(strlen(path_prifix) + 1 + strlen(i->path) + 1);
+    if (!path)
+      return INDEX_ERROR;
+    sprintf(path, "%s/%s", path_prifix, i->path);
+  }
+  if (!path)
+    return INDEX_ERROR;
+
+  if (i->mode == INDEX_MODE_FILE) {
+    char hex[HASH_LEN * 2 + 1];
+    sh_bin_to_hex(i->hash, HASH_LEN, hex);
+    if (fprintf(f, "%s %s %ld %u\n", path, hex, (long)i->change_time,
+                (unsigned)i->status) < 0) {
+      free(path);
+      return INDEX_ERROR;
+    }
+  }
+
+  ht_reset_iter(i->daughters);
+  const struct INode *curr;
+  while ((curr = ht_iter(i->daughters)) != NULL) {
+    if (_i_dump(curr, f, path) != INDEX_OK) {
+      free(path);
+      return INDEX_ERROR;
+    }
+  }
+
+  free(path);
+  return INDEX_OK;
 }

@@ -49,7 +49,7 @@ void *ht_get(const struct HashTable *ht, const char *key) {
   if (!ll)
     return NULL;
 
-  struct Node *node = ll_find(ll, key);
+  const struct Node *node = ll_find(ll, key);
   if (!node)
     return NULL;
 
@@ -68,7 +68,8 @@ int ht_remove(const struct HashTable *ht, const char *key) {
   return ll_remove(ll, key) == LL_OK ? HT_OK : HT_ERROR;
 }
 
-int ht_add(const struct HashTable *ht, const char *key, void *value) {
+int ht_add(const struct HashTable *ht, const char *key, void *value,
+           value_destructor destructor) {
   if (!ht || !key)
     return HT_ERROR;
   size_t hash = fnv1a_hash(key, ht->size);
@@ -77,13 +78,11 @@ int ht_add(const struct HashTable *ht, const char *key, void *value) {
   if (!ll)
     return HT_ERROR;
 
-  return ll_push_front(ll, key, value) == LL_OK ? HT_OK : HT_ERROR;
+  return ll_push_front(ll, key, value, destructor) == LL_OK ? HT_OK : HT_ERROR;
 }
 
-/* Return the next entry in the hash table, or NULL if none. The returned
- * pointer is valid until ht_next is called again, or ht_free is called. */
-void *ht_iter(struct HashTable *ht) {
-  struct Node *node = NULL;
+const void *ht_iter(struct HashTable *ht) {
+  const struct Node *node = NULL;
 
   if (!ht)
     return NULL;
@@ -99,7 +98,7 @@ void *ht_iter(struct HashTable *ht) {
       ht->_current_bucket++;
   }
 
-  return node;
+  return ll_node_value(node);
 }
 
 /* Reset the iterator to the beginning of the hash table.*/

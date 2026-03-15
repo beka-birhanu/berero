@@ -3,8 +3,8 @@
  * File-based mapping: utiles/blob.c <-> tests/blob.c
  */
 
-#include "../sub_commands/init.h"
 #include "../utiles/blob.h"
+#include "../sub_commands/init.h"
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -297,7 +297,8 @@ static void test_zerga_partial_gzip_header(void) {
 /* --- bwrite / bread --- */
 
 static void test_bwrite_short_dest(void) {
-  test_start("bwrite", "dest shorter than BLOB_MIN_FILE_NAME returns BLOB_ERROR");
+  test_start("bwrite",
+             "dest shorter than BLOB_MIN_FILE_NAME returns BLOB_ERROR");
   if (bwrite("/nonexistent", "ab") != BLOB_ERROR) {
     test_fail("expected BLOB_ERROR");
     return;
@@ -306,7 +307,8 @@ static void test_bwrite_short_dest(void) {
 }
 
 static void test_bread_short_source(void) {
-  test_start("bread", "source shorter than BLOB_MIN_FILE_NAME returns BLOB_ERROR");
+  test_start("bread",
+             "source shorter than BLOB_MIN_FILE_NAME returns BLOB_ERROR");
   if (bread("ab", "/tmp/out") != BLOB_ERROR) {
     test_fail("expected BLOB_ERROR");
     return;

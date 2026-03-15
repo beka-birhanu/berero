@@ -10,6 +10,8 @@
 #define HT_OK 0
 #define HT_ERROR -1
 
+typedef void (*value_destructor)(void *value);
+
 struct HashTable;
 
 /* Allocate a new hash table with the given number of buckets. Returns NULL on
@@ -19,17 +21,18 @@ struct HashTable *ht_new(size_t size);
 /* Return the value associated with key, or NULL if not found or on error. */
 void *ht_get(const struct HashTable *ht, const char *key);
 
-/* Remove the entry for key. Returns non-zero on success, 0 if not found or on
- * error. */
+/* Remove the entry for key. Returns HT_OK on success, HT_ERROR if not found or
+ * on error. */
 int ht_remove(const struct HashTable *ht, const char *key);
 
-/* Insert or overwrite key with value. Returns non-zero on success, 0 on
- * failure. value is stored as-is; caller retains ownership. */
-int ht_add(const struct HashTable *ht, const char *key, void *value);
+/* Insert or overwrite key with value. Returns HT_OK on success, HT_ERROR on
+ * failure. value is stored as-is; caller looses ownership. Returns HT_ERROR on
+ * failure. */
+int ht_add(const struct HashTable *ht, const char *key, void *value,
+           value_destructor destructor);
 
-/* Return the next entry in the hash table, or NULL if none. The returned
- * pointer is valid until ht_next is called again, or ht_free is called. */
-void *ht_iter(struct HashTable *ht);
+/* Return the next entry in the hash table, or NULL if none. */
+const void *ht_iter(struct HashTable *ht);
 
 /* Reset the iterator to the beginning of the hash table.*/
 void ht_reset_iter(struct HashTable *ht);

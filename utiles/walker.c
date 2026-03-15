@@ -28,7 +28,7 @@ static int callback(const char *fpath, const struct stat *sb, int typeflag,
 
   // Only regular files
   if (typeflag == FTW_F) {
-    if (ll_append(ctx->list, fpath, (void *)1) != LL_OK) {
+    if (ll_append(ctx->list, fpath, (void *)1, NULL) != LL_OK) {
       ctx->error = 1;
       return 1; // stop
     }
@@ -54,8 +54,15 @@ struct LinkedList *walk(const char *path) {
 
   // Single file case
   if (S_ISREG(st.st_mode)) {
-    char *key = strdup(path);
-    if (!key || ll_append(list, key, (void *)1) != LL_OK) {
+    char *key;
+    if (path[0] == '/' || path[0] == '.') {
+      key = strdup(path);
+    } else {
+      key = malloc(strlen(path) + 3);
+      if (key)
+        sprintf(key, "./%s", path);
+    }
+    if (!key || ll_append(list, key, (void *)1, NULL) != LL_OK) {
       free(key);
       ll_free(list);
       return NULL;
@@ -69,8 +76,16 @@ struct LinkedList *walk(const char *path) {
   };
   ctx = &context;
 
+  char norm[PATH_MAX];
+  if (path[0] == '/' ||
+      (path[0] == '.' && (path[1] == '/' || path[1] == '\0'))) {
+    snprintf(norm, sizeof(norm), "%s", path);
+  } else {
+    snprintf(norm, sizeof(norm), "./%s", path);
+  }
+
   int flags = FTW_PHYS;
-  if (nftw(path, callback, MAX_OPEN_FILES, flags) == -1) {
+  if (nftw(norm, callback, MAX_OPEN_FILES, flags) == -1) {
     perror("nftw");
     ll_free(list);
     ctx = NULL;

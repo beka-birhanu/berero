@@ -3,11 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+struct Node *_ll_find(const struct LinkedList *ll, const char *key);
+
 struct Node {
   char *key;
   void *value;
   struct Node *prev;
   struct Node *next;
+  value_destructor destructor;
 };
 
 struct LinkedList {
@@ -49,7 +52,7 @@ struct LinkedList *ll_new(void) {
   return list;
 }
 
-struct Node *ll_iter(struct LinkedList *ll) {
+const struct Node *ll_iter(struct LinkedList *ll) {
   if (!ll || !ll->_current)
     return NULL;
 
@@ -75,14 +78,16 @@ void ll_free(struct LinkedList *ll) {
   while (cur) {
     struct Node *next = cur->next;
     free(cur->key);
-    /* value is void*; caller owns it, we do not free it */
+    if (cur->destructor)
+      cur->destructor(cur->value);
     free(cur);
     cur = next;
   }
   free(ll);
 }
 
-int ll_append(struct LinkedList *ll, const char *key, void *value) {
+int ll_append(struct LinkedList *ll, const char *key, void *value,
+              value_destructor destructor) {
   if (!ll || !key || !value)
     return LL_ERROR;
 
@@ -91,11 +96,12 @@ int ll_append(struct LinkedList *ll, const char *key, void *value) {
     return LL_ERROR;
 
   node->key = strdup(key);
-  node->value = value;
   if (!node->key) {
     free(node);
     return LL_ERROR;
   }
+  node->value = value;
+  node->destructor = destructor;
 
   struct Node *last = ll->tail->prev;
   last->next = node;
@@ -107,7 +113,8 @@ int ll_append(struct LinkedList *ll, const char *key, void *value) {
   return LL_OK;
 }
 
-int ll_push_front(struct LinkedList *ll, const char *key, void *value) {
+int ll_push_front(struct LinkedList *ll, const char *key, void *value,
+                  value_destructor destructor) {
   if (!ll || !key || !value)
     return LL_ERROR;
 
@@ -116,11 +123,12 @@ int ll_push_front(struct LinkedList *ll, const char *key, void *value) {
     return LL_ERROR;
 
   node->key = strdup(key);
-  node->value = value;
   if (!node->key) {
     free(node);
     return LL_ERROR;
   }
+  node->value = value;
+  node->destructor = destructor;
 
   struct Node *first = ll->head->next;
   node->next = first;
@@ -132,7 +140,7 @@ int ll_push_front(struct LinkedList *ll, const char *key, void *value) {
   return LL_OK;
 }
 
-struct Node *ll_find(const struct LinkedList *ll, const char *key) {
+inline struct Node *_ll_find(const struct LinkedList *ll, const char *key) {
   if (!ll || !key)
     return NULL;
 
@@ -143,8 +151,12 @@ struct Node *ll_find(const struct LinkedList *ll, const char *key) {
   return NULL;
 }
 
+const struct Node *ll_find(const struct LinkedList *ll, const char *key) {
+  return _ll_find(ll, key);
+}
+
 int ll_remove(struct LinkedList *ll, const char *key) {
-  struct Node *node = ll_find(ll, key);
+  struct Node *node = _ll_find(ll, key);
   if (!node)
     return LL_ERROR;
 
@@ -152,13 +164,15 @@ int ll_remove(struct LinkedList *ll, const char *key) {
   node->next->prev = node->prev;
 
   free(node->key);
+  if (node->destructor)
+    node->destructor(node->value);
   free(node);
   --ll->len;
 
   return LL_OK;
 }
 
-int ll_pop(struct LinkedList *ll, int dir) {
+struct Node *ll_pop(struct LinkedList *ll, int dir) {
   if (!ll || ll->len == 0 || (dir != LL_DIR_FRONT && dir != LL_DIR_BACK))
     return LL_ERROR;
 
@@ -167,11 +181,9 @@ int ll_pop(struct LinkedList *ll, int dir) {
   node->prev->next = node->next;
   node->next->prev = node->prev;
 
-  free(node->key);
-  free(node);
   --ll->len;
 
-  return LL_OK;
+  return node->value;
 }
 
 void ll_swap_pos(struct Node *n1, struct Node *n2) {
@@ -196,6 +208,15 @@ const char *ll_node_key(const struct Node *node) {
 
 void *ll_node_value(const struct Node *node) {
   return node ? node->value : NULL;
+}
+
+void ll_node_free(struct Node *node) {
+  if (!node)
+    return;
+
+  free(node->key);
+  free(node->value);
+  free(node);
 }
 
 char *ll_stringify(const struct LinkedList *ll) {

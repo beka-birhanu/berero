@@ -9,23 +9,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
-static void hash_to_hex(const unsigned char *hash, unsigned int len,
-                        char *out) {
-  if (!hash || !out)
-    return;
-  for (unsigned int i = 0; i < len; i++)
-    sprintf(out + (i * 2), "%02x", hash[i]);
-  out[len * 2] = '\0';
-}
-
 int add(int argc, char *argv[]) {
   if (argc < 2) {
     help(argc, argv);
     return ADD_ERROR;
   }
 
-  struct HashTable *idx_map = im_load();
-  if (!idx_map) {
+  struct INode *idx_root = i_load();
+  if (!idx_root) {
     perror(INDEX_FILE_PATH);
     return ADD_ERROR;
   }
@@ -36,23 +27,23 @@ int add(int argc, char *argv[]) {
       fprintf(stderr,
               "Warning: path %s is not in the current working directory\n",
               path);
-      ht_free(idx_map);
+      i_free(idx_root);
       return ADD_ERROR;
     }
 
     struct LinkedList *list = walk(path);
     if (!list) {
-      ht_free(idx_map);
+      i_free(idx_root);
       return ADD_ERROR;
     }
 
     ll_reset_iter(list);
-    struct Node *node;
+    const struct Node *node;
     while ((node = ll_iter(list)) != NULL) {
       const char *key = ll_node_key(node);
       if (!key) {
         ll_free(list);
-        ht_free(idx_map);
+        i_free(idx_root);
         return ADD_ERROR;
       }
 
@@ -60,11 +51,13 @@ int add(int argc, char *argv[]) {
       if (stat(key, &st) == -1) {
         perror(key);
         ll_free(list);
-        ht_free(idx_map);
+        i_free(idx_root);
         return ADD_ERROR;
       }
 
-      const struct Index *idx = i_get(idx_map, key);
+      const struct INode *idx = i_get(idx_root, key);
+      if (idx && idx->mode != INDEX_MODE_FILE)
+        continue;
       if (idx && idx->change_time == st.st_mtime)
         continue;
 
@@ -72,39 +65,43 @@ int add(int argc, char *argv[]) {
       if (!file) {
         perror(key);
         ll_free(list);
-        ht_free(idx_map);
+        i_free(idx_root);
         return ADD_ERROR;
       }
 
-      unsigned char hash_bin[EVP_MAX_MD_SIZE];
+      unsigned char *hash_bin = malloc(HASH_LEN);
+      if (!hash_bin) {
+        fclose(file);
+        ll_free(list);
+        i_free(idx_root);
+        return ADD_ERROR;
+      }
       if (sh_hash(file, hash_bin) != HASH_OK) {
         fclose(file);
         ll_free(list);
-        ht_free(idx_map);
+        i_free(idx_root);
         return ADD_ERROR;
       }
       fclose(file);
 
-      /* SHA-256 = 32 bytes */
-      char hash_hex[65];
-      hash_to_hex(hash_bin, 32, hash_hex);
-      if ((strcmp(idx ? idx->hash : "", hash_hex) == 0))
+      if (idx && memcmp(idx->hash, hash_bin, HASH_LEN) == 0)
         continue;
 
+      char hash_hex[HASH_LEN * 2 + 1];
+      sh_bin_to_hex(hash_bin, HASH_LEN, hash_hex);
       if (bwrite(key, hash_hex) != BLOB_OK) {
         ll_free(list);
-        ht_free(idx_map);
+        i_free(idx_root);
         return ADD_ERROR;
       }
 
-      i_add(idx_map, i_new(key, hash_hex, st.st_mtime,
-                           idx ? INDEX_STATUS_MODIFIED : INDEX_STATUS_ADDED));
+      i_add(idx_root, i_new(st.st_mtime, INDEX_MODE_FILE, INDEX_STATUS_MODIFIED,
+                            0, strdup(key), hash_bin));
     }
     ll_free(list);
   }
-
-  im_dump(idx_map);
-  ht_free(idx_map);
+  i_dump(idx_root);
+  i_free(idx_root);
 
   return ADD_OK;
 }
