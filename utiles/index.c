@@ -10,6 +10,7 @@ int _i_add(struct INode *curr, const struct INode *inode, char *path_tok);
 int _recomp_hash(struct INode *curr);
 void _i_free(void *i);
 int _i_dump(const struct INode *i, FILE *f, const char *path_prifix);
+void _i_free_hash_comb(unsigned char **hashes, size_t len);
 
 struct INode *i_new(time_t change_time, short unsigned int mode,
                     short unsigned int status, unsigned int n_daughters,
@@ -104,33 +105,49 @@ int _recomp_hash(struct INode *curr) {
   if (curr->n_daughters == 0)
     return INDEX_OK;
 
-  const unsigned char **hashes =
-      malloc(curr->n_daughters * sizeof(unsigned char *));
+  unsigned char **hashes = malloc(curr->n_daughters * sizeof(unsigned char *));
   if (!hashes)
     return INDEX_ERROR;
 
   ht_reset_iter(curr->daughters);
+
   for (unsigned int i = 0; i < curr->n_daughters; i++) {
     const struct INode *inode = ht_iter(curr->daughters);
     if (!inode)
       return INDEX_ERROR;
-    hashes[i] = inode->hash;
+
+    unsigned char *buf = malloc(HASH_LEN + sizeof(uint16_t) + sizeof(uint16_t));
+    if (!buf) {
+      _i_free_hash_comb(hashes, curr->n_daughters);
+      return INDEX_ERROR;
+    }
+
+    memcpy(buf, inode->hash, HASH_LEN);
+
+    uint16_t zero = 0;
+    memcpy(buf + HASH_LEN, &zero, sizeof(zero));
+
+    uint16_t mode = inode->mode;
+    memcpy(buf + HASH_LEN + sizeof(zero), &mode, sizeof(mode));
+
+    hashes[i] = buf;
   }
 
   unsigned char *out = malloc(HASH_LEN);
   if (!out) {
-    free(hashes);
+    _i_free_hash_comb(hashes, curr->n_daughters);
     return INDEX_ERROR;
   }
 
-  if (sh_combine_hash(hashes, curr->n_daughters, out) != HASH_OK) {
-    free(hashes);
+  if (sh_combine_hash((const unsigned char **)hashes, curr->n_daughters, out) !=
+      HASH_OK) {
+    _i_free_hash_comb(hashes, curr->n_daughters);
     return INDEX_ERROR;
   }
 
   free(curr->hash);
   curr->hash = out;
-  free(hashes);
+  _i_free_hash_comb(hashes, curr->n_daughters);
   return INDEX_OK;
 }
 
@@ -302,4 +319,14 @@ int _i_dump(const struct INode *i, FILE *f, const char *path_prifix) {
 
   free(path);
   return INDEX_OK;
+}
+
+void _i_free_hash_comb(unsigned char **hashes, size_t len) {
+  if (!hashes)
+    return;
+
+  for (size_t i = 0; i < len; i++)
+    free(hashes[i]);
+
+  free(hashes);
 }

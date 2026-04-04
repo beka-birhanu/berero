@@ -316,6 +316,85 @@ static void test_bread_short_source(void) {
   test_ok();
 }
 
+/* --- object_file_location / object_file_dir_location --- */
+
+static void test_object_file_location_null_hash(void) {
+  test_start("object_file_location", "NULL hash returns BLOB_ERROR");
+  char out[BLOB_OBJECT_FILE_LEN];
+  if (object_file_location(NULL, out) != BLOB_ERROR) {
+    test_fail("expected BLOB_ERROR");
+    return;
+  }
+  test_ok();
+}
+
+static void test_object_file_location_null_out(void) {
+  test_start("object_file_location", "NULL out returns BLOB_ERROR");
+  if (object_file_location("aabb", NULL) != BLOB_ERROR) {
+    test_fail("expected BLOB_ERROR");
+    return;
+  }
+  test_ok();
+}
+
+static void test_object_file_location_valid(void) {
+  test_start("object_file_location", "valid hash produces correct path");
+  /* 64-char hex string (SHA-256 size). */
+  const char *hash =
+      "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
+  char out[BLOB_OBJECT_FILE_LEN];
+  if (object_file_location(hash, out) != BLOB_OK) {
+    test_fail("returned BLOB_ERROR");
+    return;
+  }
+  /* Expected: INIT_OBJECT_DIR + "/aa/" + (hash+2) */
+  char expected[BLOB_OBJECT_FILE_LEN];
+  snprintf(expected, sizeof(expected), "%s/%.2s/%s", INIT_OBJECT_DIR, hash,
+           hash + 2);
+  if (strcmp(out, expected) != 0) {
+    test_fail("path does not match expected format");
+    return;
+  }
+  test_ok();
+}
+
+static void test_object_file_dir_location_null_hash(void) {
+  test_start("object_file_dir_location", "NULL hash returns BLOB_ERROR");
+  char out[BLOB_OBJECT_DIR_LEN];
+  if (object_file_dir_location(NULL, out) != BLOB_ERROR) {
+    test_fail("expected BLOB_ERROR");
+    return;
+  }
+  test_ok();
+}
+
+static void test_object_file_dir_location_null_out(void) {
+  test_start("object_file_dir_location", "NULL out returns BLOB_ERROR");
+  if (object_file_dir_location("aabb", NULL) != BLOB_ERROR) {
+    test_fail("expected BLOB_ERROR");
+    return;
+  }
+  test_ok();
+}
+
+static void test_object_file_dir_location_valid(void) {
+  test_start("object_file_dir_location", "valid hash produces correct dir path");
+  const char *hash =
+      "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
+  char out[BLOB_OBJECT_DIR_LEN];
+  if (object_file_dir_location(hash, out) != BLOB_OK) {
+    test_fail("returned BLOB_ERROR");
+    return;
+  }
+  char expected[BLOB_OBJECT_DIR_LEN];
+  snprintf(expected, sizeof(expected), "%s/%.2s", INIT_OBJECT_DIR, hash);
+  if (strcmp(out, expected) != 0) {
+    test_fail("dir path does not match expected format");
+    return;
+  }
+  test_ok();
+}
+
 static void test_bwrite_roundtrip(void) {
   test_start("bwrite", "bwrite then bread round-trip");
   char cwd[PATH_MAX];
@@ -371,6 +450,13 @@ int main(void) {
   test_zerga_empty_input();
   test_zerga_corrupt_data();
   test_zerga_partial_gzip_header();
+  printf("--- object_file_location / object_file_dir_location ---\n");
+  test_object_file_location_null_hash();
+  test_object_file_location_null_out();
+  test_object_file_location_valid();
+  test_object_file_dir_location_null_hash();
+  test_object_file_dir_location_null_out();
+  test_object_file_dir_location_valid();
   printf("--- bwrite / bread ---\n");
   test_bwrite_short_dest();
   test_bread_short_source();

@@ -26,7 +26,7 @@ hash: $(BUILD)
 	@$(CC) $(CFLAGS) utiles/hash.c $(LDFLAGS) $(LDLIBS) -o $(BUILD)/hash
 	@./$(BUILD)/hash todo.md
 
-test: test-hash test-blob test-index test-hash_table test-linked_list test-walker
+test: test-hash test-blob test-index test-hash_table test-linked_list test-walker test-tree test-commit
 	@echo "[run] All tests passed."
 
 test-hash: $(BUILD)
@@ -53,9 +53,17 @@ test-walker: $(BUILD)
 	@$(CC) $(CFLAGS) -I. tests/walker.c utiles/walker.c utiles/linked_list.c -o $(BUILD)/walker_test
 	@./$(BUILD)/walker_test
 
+test-tree: $(BUILD)
+	@$(CC) $(CFLAGS) -I. tests/tree.c utiles/tree.c utiles/blob.c utiles/hash.c utiles/index.c utiles/hash_table.c utiles/linked_list.c $(LDFLAGS) $(LDLIBS) -o $(BUILD)/tree_test
+	@./$(BUILD)/tree_test
+
+test-commit: $(BUILD)
+	@$(CC) $(CFLAGS) -I. tests/commit.c sub_commands/commit.c sub_commands/help.c sub_commands/init.c utiles/tree.c utiles/blob.c utiles/hash.c utiles/index.c utiles/hash_table.c utiles/linked_list.c $(LDFLAGS) $(LDLIBS) -o $(BUILD)/commit_test
+	@./$(BUILD)/commit_test
+
 clean:
 	rm -rf $(BUILD)
 
 force:
 
-.PHONY: run hash test test-hash test-blob test-index test-hash_table test-linked_list test-walker clean
+.PHONY: run hash test test-hash test-blob test-index test-hash_table test-linked_list test-walker test-tree test-commit clean

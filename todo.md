@@ -2,11 +2,11 @@
   - [x] `berero init`
   - [x] `berero add`
   - [ ] `berero status`
-  - [ ] `berero commit`
+  - [x] `berero commit`
   - [ ] `berero mnarku`
   - [ ] `berero diff`
   - [ ] `berero merge`
-  - [ ] `berero checkout`
+  - [ ] `berero branch` `-s` / `-d` / `-c`
   - [ ] `berero reset`
   - [ ] `berero rebase`
   - [ ] `berero ammend`

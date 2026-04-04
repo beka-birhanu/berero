@@ -6,11 +6,12 @@
 
 #define CHUNK_SIZE 16384
 #define EVP_OK 1
+#define ENTRY_LEN (HASH_LEN + sizeof(uint16_t) + sizeof(uint16_t))
 
 static int cmp_hashes(const void *a, const void *b) {
   const unsigned char *ha = *(const unsigned char **)a;
   const unsigned char *hb = *(const unsigned char **)b;
-  return memcmp(ha, hb, HASH_LEN);
+  return memcmp(ha, hb, ENTRY_LEN);
 }
 
 void sh_bin_to_hex(const unsigned char *hash, unsigned int len, char *out) {
@@ -83,7 +84,7 @@ int sh_combine_hash(const unsigned char **hashes, size_t count,
   qsort(hashes, count, sizeof(unsigned char *), cmp_hashes);
 
   for (size_t i = 0; i < count; i++) {
-    if (EVP_DigestUpdate(ctx, hashes[i], HASH_LEN) != 1) {
+    if (EVP_DigestUpdate(ctx, hashes[i], ENTRY_LEN) != 1) {
       EVP_MD_CTX_free(ctx);
       return HASH_ERROR;
     }

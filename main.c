@@ -1,4 +1,5 @@
 #include "./sub_commands/add.h"
+#include "./sub_commands/commit.h"
 #include "./sub_commands/help.h"
 #include "./sub_commands/init.h"
 #include <stdio.h>
@@ -23,6 +24,10 @@ int main(int argc, char *argv[]) {
 
   if (strcmp(argv[1], ADD_SUBCOMMAND) == 0) {
     return add(argc - 1, ++argv);
+  }
+
+  if (strcmp(argv[1], COMMIT_SUBCOMMAND) == 0) {
+    return commit(argc - 1, ++argv);
   }
 
   help(argc - 1, ++argv);

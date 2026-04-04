@@ -6,7 +6,6 @@
 #include <sys/stat.h>
 #include <zlib.h>
 
-#define DIR_PRIVATE_MODE 0700
 #define CHUNK_SIZE 16384
 
 int chimek(FILE *source, FILE *dest) {
@@ -129,7 +128,7 @@ int bwrite(const char *source, const char *dest) {
            dest);
 
   /* create directory if it doesn’t exist */
-  if (mkdir(dest_dir_path, DIR_PRIVATE_MODE) == -1 && errno != EEXIST) {
+  if (mkdir(dest_dir_path, BLOB_DIR_PRIVATE_MODE) == -1 && errno != EEXIST) {
     perror(dest_dir_path);
     fclose(source_file);
     return BLOB_ERROR;
@@ -196,5 +195,22 @@ int bread(const char *source, const char *dest) {
 
   fclose(source_file);
   fclose(dest_file);
+  return BLOB_OK;
+}
+
+int object_file_location(const char *hash, char *file_out) {
+  if (!hash || !file_out)
+    return BLOB_ERROR;
+
+  snprintf(file_out, BLOB_OBJECT_FILE_LEN, "%s/%.2s/%s", INIT_OBJECT_DIR, hash,
+           hash + 2);
+  return BLOB_OK;
+}
+
+int object_file_dir_location(const char *hash, char *dir_out) {
+  if (!hash || !dir_out)
+    return BLOB_ERROR;
+
+  snprintf(dir_out, BLOB_OBJECT_DIR_LEN, "%s/%.2s", INIT_OBJECT_DIR, hash);
   return BLOB_OK;
 }
